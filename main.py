@@ -2,6 +2,10 @@ import random
 import threading
 import math
 
+GRAY = "⬛" # Represents Gray feedback
+YELLOW = "🟨" # Represents Yellow feedback
+GREEN = "🟩" # Represents Green feedback
+
 available_words = [i[:-1] for i in open("words.txt", "r").readlines()]  #list of all possible answers
 permanent_answers = [i[:-1] for i in open("words.txt", "r").readlines()]  #list of all possible answers, not changed in code
 wordsAllowed = [i[:-1] for i in open("wordsAllowed.txt", "r").readlines()]  #list of all possible entries
@@ -506,8 +510,9 @@ def test_highestFrequency(n):   # tests search using letter frequencies - NOW WI
         guessWord = "salet"
         steps = 1
         guess_history.append(guessWord)
-        colors = get_guess_colors(guessWord, test_word) # Get colors
-        print(f"Guess {steps}: {guessWord} -> {colors}") # Print with colors
+        colors = get_guess_colors(guessWord, test_word)
+        emoji_output = format_colors_to_emoji(colors)
+        print(f"Guess {steps}: {guessWord} -> {emoji_output}")
 
         if guessWord == test_word:
             print(f"Solved in {steps} steps!")
@@ -537,8 +542,9 @@ def test_highestFrequency(n):   # tests search using letter frequencies - NOW WI
 
             steps += 1
             guess_history.append(guessWord)
-            colors = get_guess_colors(guessWord, test_word) # Get colors
-            print(f"Guess {steps}: {guessWord} -> {colors}") # Print with colors
+            colors = get_guess_colors(guessWord, test_word)
+            emoji_output = format_colors_to_emoji(colors)
+            print(f"Guess {steps}: {guessWord} -> {emoji_output}")
 
             if guessWord == test_word:
                 print(f"Solved in {steps} steps!")
@@ -663,3 +669,9 @@ def get_guess_colors(guess, target_word):
                 colors[i] = 'B'
 
     return "".join(colors) # Return as a single string like "BGYBB"
+
+def format_colors_to_emoji(color_string):
+    """Converts a color string like 'BGYBB' to emojis."""
+    emoji_map = {'B': GRAY, 'G': GREEN, 'Y': YELLOW}
+    # Use .get(char, char) to safely handle any unexpected characters
+    return "".join(emoji_map.get(char, char) for char in color_string)
