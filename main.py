@@ -144,6 +144,7 @@ def isBlimp(wordList):   #returns whether or not a word list has the "blimp prob
                 except:
                     commonLettersDict[commonLetters] = 1
     return False
+    
 
 def getBlimpMax(wordList, commonLetters, totalWords=wordsAllowed): #returns highest word by letter frequency, excluding letters in common with most possible answers
     letterDictionary = get_letter_dictionary(wordList)
@@ -151,27 +152,74 @@ def getBlimpMax(wordList, commonLetters, totalWords=wordsAllowed): #returns high
     return max(wordValues, key=wordValues.get)
 
 def blimpSearch(wordList):  #made to avoid the "blimp problem" where a search would be narrowed down best by a word already filtered out
-    threshold = math.floor(len(wordList)/2) # ex: match, batch, latch are possible answers, blimp would be a good filter word
-    commonLettersDict = {}
-    blimpWords = {}
-    for word1 in wordList:
-        for word2 in wordList:
-            if word2 == word1:
-                continue
-            if len(list(set(word1) & set(word2))) >= 3: # if words have at least 3 letters in common
-                commonLetters = ""
-                for letters in list(set(word1) & set(word2)):
-                    commonLetters += letters
-                commonLetters = "".join(sorted(commonLetters))
-                try:
-                    commonLettersDict[commonLetters] += 1
-                except:
-                    commonLettersDict[commonLetters] = 1
-    for commonLetters in commonLettersDict:
-        if commonLettersDict[commonLetters] >= threshold:
-            blimpWord = getBlimpMax(wordList, commonLetters)
-            blimpWords.update({blimpWord: get_word_value(blimpWord, get_letter_dictionary(wordList), commonLetters)})
-    return max(blimpWords, key=blimpWords.get)
+    """
+    Chooses the next guess when the 'blimp' condition is met (small list
+    of very similar words). Uses a Minimax strategy to find the guess
+    that minimizes the size of the largest possible remaining word list
+    in the worst-case scenario.
+    """
+    best_guess = ""
+    # Initialize with a value larger than any possible list size
+    min_max_remaining_size = len(wordList) + 1
+
+    # Decide which set of words to try as guesses. Using all allowed words
+    # is more thorough but slower. Using just the current candidates is faster.
+    # Using wordsAllowed is generally better for breaking blimp situations.
+    candidate_guesses = wordsAllowed
+
+    if not candidate_guesses: # Safety check if wordsAllowed is somehow empty
+        return getMaxValue1(wordList) # Fallback
+
+    for candidate in candidate_guesses:
+        max_remaining_size = 0
+        # Keep track of outcomes if needed for tie-breaking based on average size
+        # possible_outcome_sizes = []
+
+        # Simulate guessing 'candidate' against each word currently possible
+        for potential_answer in wordList:
+            # Use a copy of wordList for the simulation to avoid modifying the original list
+            simulated_remaining_list = filter_words(wordList[:], candidate, potential_answer)
+            outcome_size = len(simulated_remaining_list)
+
+            # Track the worst-case (largest) remaining list size for this candidate guess
+            if outcome_size > max_remaining_size:
+                max_remaining_size = outcome_size
+
+            # possible_outcome_sizes.append(outcome_size) # Store size for avg calculation if needed
+
+        # --- Score the candidate guess based on the worst-case outcome ---
+        # If this candidate guarantees a smaller worst-case list than the current best, it's the new best.
+        if max_remaining_size < min_max_remaining_size:
+            min_max_remaining_size = max_remaining_size
+            best_guess = candidate
+            # avg_for_best = sum(possible_outcome_sizes) / len(possible_outcome_sizes) # Store avg if needed for tie-break
+
+        # --- Tie-breaking logic (optional but helpful) ---
+        elif max_remaining_size == min_max_remaining_size:
+            # Prefer guesses that are still possible answers themselves
+            if best_guess not in wordList and candidate in wordList:
+                best_guess = candidate
+                # avg_for_best = sum(possible_outcome_sizes) / len(possible_outcome_sizes) # Update avg
+            # # Alternative tie-breaker: prefer lower average outcome size
+            # else:
+            #     current_avg = sum(possible_outcome_sizes) / len(possible_outcome_sizes)
+            #     if current_avg < avg_for_best:
+            #         best_guess = candidate
+            #         avg_for_best = current_avg
+
+    # --- Fallback ---
+    # If no suitable guess was found (e.g., all guesses lead to the same large list,
+    # which shouldn't happen with correct logic but is a safe fallback),
+    # or if the best guess somehow remained empty.
+    if not best_guess:
+        print("Warning: BlimpSearch fallback triggered.") # Optional warning
+        # Use a simple strategy like highest frequency on the remaining list
+        best_guess = getMaxValue1(wordList)
+        # Or even pick randomly from the list if getMaxValue1 fails
+        if not best_guess and wordList:
+             best_guess = random.choice(wordList)
+
+    return best_guess
 
 def get_word_value2(word, reset_list):   #goes through all the combinations of letter states for the word and returns a score based on the weighted average list reduction (lower is better)
     word_list = reset_list
