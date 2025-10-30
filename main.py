@@ -260,10 +260,7 @@ def isBlimp(wordList):   #returns whether or not a word list has the "blimp prob
     return False
     
 
-def getBlimpMax(wordList, commonLetters, totalWords=wordsAllowed): #returns highest word by letter frequency, excluding letters in common with most possible answers
-    letterDictionary = get_letter_dictionary(wordList)
-    wordValues = {word:get_word_value(word, letterDictionary, commonLetters) for word in totalWords}
-    return max(wordValues, key=wordValues.get)
+
 
 # --- REVISED: Replaced old function with a true Minimax search ---
 def blimpSearch(wordList):
