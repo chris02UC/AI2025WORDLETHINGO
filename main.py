@@ -146,10 +146,7 @@ def isBlimp(wordList):   #returns whether or not a word list has the "blimp prob
     return False
     
 
-def getBlimpMax(wordList, commonLetters, totalWords=wordsAllowed): #returns highest word by letter frequency, excluding letters in common with most possible answers
-    letterDictionary = get_letter_dictionary(wordList)
-    wordValues = {word:get_word_value(word, letterDictionary, commonLetters) for word in totalWords}
-    return max(wordValues, key=wordValues.get)
+
 
 def blimpSearch(wordList):  #made to avoid the "blimp problem" where a search would be narrowed down best by a word already filtered out
     """
@@ -630,60 +627,6 @@ def test_highestFrequency(n):   # tests search using letter frequencies - NOW WI
 
 # --- END OF MODIFIED FUNCTION ---
 
-# def test_highestFrequency(n):   #tests search using letter frequencies
-#     game_data = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "DNF": 0}
-#     for i in range(n):
-#         available_words = [i[:-1] for i in open("words.txt", "r").readlines()]
-#         test_word = random.choice(available_words)
-#         # print(test_word)
-#         steps = 1
-#         if test_word == "salet":
-#             # print(steps, available_words)
-#             game_data.update({str(steps): game_data[str(steps)] + 1})
-#             success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#             print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#             continue
-#         available_words = filter_words(available_words, "salet", test_word)
-#         if test_word not in available_words:
-#             raise RuntimeError("Answer not in list")
-#         if len(available_words) == 1 and available_words[0] == test_word:
-#             steps += 1
-#             # print(steps, available_words)
-#             game_data.update({str(steps): game_data[str(steps)] + 1})
-#             success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#             print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#             continue
-#         for j in range(5):
-#             if isBlimp(available_words):
-#                 guessWord = blimpSearch(available_words)
-#             else:
-#                 guessWord = getMaxValue1(available_words)
-#             available_words = filter_words(available_words, guessWord, test_word)
-#             steps += 1
-#             # print(steps, available_words)
-#             if test_word not in available_words:
-#                 raise RuntimeError("Answer not in list")
-#             if len(available_words) == 1 and guessWord == test_word:
-#                 game_data.update({str(steps): game_data[str(steps)] + 1})
-#                 success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#                 print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#                 break 
-#             elif len(available_words) == 1 and available_words[0] == test_word:
-#                 steps += 1
-#                 if steps == 7:
-#                     game_data.update({"DNF": game_data["DNF"] + 1})
-#                     success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#                     print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#                     break
-#                 else:
-#                     game_data.update({str(steps): game_data[str(steps)] + 1})
-#                     success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#                     print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#                     break       
-#         else:
-#             game_data.update({"DNF": game_data["DNF"] + 1})
-#             success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#             print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
             
 # test_highestFrequency(1000)
 
