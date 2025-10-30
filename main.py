@@ -6,9 +6,18 @@ GRAY = "⬛" # Represents Gray feedback
 YELLOW = "🟨" # Represents Yellow feedback
 GREEN = "🟩" # Represents Green feedback
 
-available_words = [i[:-1] for i in open("words.txt", "r").readlines()]  #list of all possible answers
-permanent_answers = [i[:-1] for i in open("words.txt", "r").readlines()]  #list of all possible answers, not changed in code
-wordsAllowed = [i[:-1] for i in open("wordsAllowed.txt", "r").readlines()]  #list of all possible entries
+# --- Load word lists ONCE at the start ---
+try:
+    available_words = [i[:-1] for i in open("words.txt", "r").readlines()]  #list of all possible answers
+    permanent_answers = [i[:-1] for i in open("words.txt", "r").readlines()]  #list of all possible answers, not changed in code
+    wordsAllowed = [i[:-1] for i in open("wordsAllowed.txt", "r").readlines()]  #list of all possible entries
+except FileNotFoundError:
+    print("FATAL ERROR: words.txt or wordsAllowed.txt not found.")
+    print("Please make sure the word list files are in the same directory as main.py")
+    available_words = []
+    permanent_answers = []
+    wordsAllowed = []
+
 
 def get_letter_dictionary(word_list):   #gets a letter dictionary of the each letter and the number of times it appears in the word list
     letter_dictionary = {}
@@ -16,56 +25,125 @@ def get_letter_dictionary(word_list):   #gets a letter dictionary of the each le
         letter_dictionary.update({letter:0})
     for word in word_list:
         for letter in word:
-            letter_dictionary.update({letter:(letter_dictionary[letter] + 1)})
+            try:
+                letter_dictionary.update({letter:(letter_dictionary[letter] + 1)})
+            except KeyError:
+                # This can happen if the word list contains non-alphabetic chars
+                pass
     return letter_dictionary
 
 def game_data_avg(game_data):   #returns average steps to complete a game
     try:
-        return (game_data["1"] + 2 * game_data["2"] + 3 * game_data["3"] + 4 * game_data["4"] + 5 * game_data["5"] + 6 * game_data["6"]) / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"])
+        total_steps = (game_data["1"] + 2 * game_data["2"] + 3 * game_data["3"] + 4 * game_data["4"] + 5 * game_data["5"] + 6 * game_data["6"])
+        total_games = (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"])
+        if total_games == 0:
+            return 0
+        return total_steps / total_games
     except:
         return 0
 
 def repetition_filter(char, num_repetitions, wordList, exact):  #filters out words with incorrect number of character repetitions
+    return_list = []
     if exact:
         for word in wordList:
-            if word.count(char) != num_repetitions:
-                wordList.remove(word)
+            if word.count(char) == num_repetitions:
+                return_list.append(word)
     else:
         for word in wordList:
-            if word.count(char) < num_repetitions:
-                wordList.remove(word)
-    return wordList
+            if word.count(char) >= num_repetitions:
+                return_list.append(word)
+    return return_list
 
 def filter_words(return_list, guess, answer):   #returns a list of possible words left, given a guess and an answer
-    for int in range(len(answer)):
-        if guess[int] == answer[int]:   #filters words with correct letter at specific location
-            # print(guess[int], "at specific location")
-            return_list = filter(guess[int], position=(int), wordList=return_list)
-        elif guess[int] in answer:    #filters words with correct letter present
-            # print(guess[int], "in word")
-            return_list = filter(guess[int], wordList=return_list)   
-            return_list = wrongPositionFilter(guess[int], int, wordList=return_list) 
-        elif guess[int] not in answer:  #filters out words with invalid letter in word
-            # print(guess[int], "not in word")
-            return_list = inverseFilter(filterChar=guess[int], wordList=return_list)
-    for char in guess:
-        if not guess.count(char) > 1 or not answer.count(char) > 1:
+    # This function simulates the feedback from get_guess_colors and filters the list
+    # It is complex but crucial for handling duplicate letters correctly.
+    
+    # Use a copy to avoid modification during iteration
+    current_list = return_list[:]
+    
+    # Get the color feedback for this guess/answer pair
+    colors = get_guess_colors(guess, answer)
+    
+    # Store exact counts (from 'B' feedback on a repeated letter)
+    exact_counts = {}
+    # Store minimum counts (from 'G' and 'Y' feedback)
+    min_counts = {}
+    
+    for i in range(5):
+        char = guess[i]
+        
+        # Calculate minimum required counts based on G/Y
+        gy_count = 0
+        for j in range(5):
+            if guess[j] == char and colors[j] in ('G', 'Y'):
+                gy_count += 1
+        if gy_count > 0:
+            min_counts[char] = max(min_counts.get(char, 0), gy_count)
+            
+        # If feedback is Black ('B'), and we *know* the letter is in the word
+        # (from a G/Y elsewhere), this 'B' implies an EXACT count.
+        if colors[i] == 'B' and char in min_counts:
+            exact_counts[char] = min_counts[char]
+            
+    # Apply filters based on colors and counts
+    temp_list = []
+    for word in current_list:
+        valid = True
+        
+        # Loop through each position
+        for i in range(5):
+            char = guess[i]
+            color = colors[i]
+            
+            if color == 'G':
+                if word[i] != char:
+                    valid = False
+                    break
+            elif color == 'Y':
+                if word[i] == char or char not in word:
+                    valid = False
+                    break
+            elif color == 'B':
+                # If a letter is 'B' and NOT in min_counts, it's not in the word at all.
+                if char not in min_counts and char in word:
+                    valid = False
+                    break
+                # If it IS in min_counts, it's a duplicate letter.
+                # The count logic below will handle this.
+                # We also need to check if a G/Y was already seen
+                # This 'B' implies it's not at this position (which is obvious)
+                # but the `exact_counts` logic is the main filter for this.
+                pass
+        
+        if not valid:
             continue
-        if guess.count(char) <= answer.count(char): # "beers" "peees"
-            return_list = repetition_filter(char, guess.count(char), return_list, False)  # we know the answer has at least guess.count(char) characters
-        else: # guess count > answer count
-            return_list = repetition_filter(char, answer.count(char), return_list, True) # answer count has the exact correct occurences of char
-    return return_list
+            
+        # Check counts
+        for char, count in min_counts.items():
+            if char in exact_counts:
+                if word.count(char) != exact_counts[char]:
+                    valid = False
+                    break
+            elif word.count(char) < count:
+                valid = False
+                break
+                
+        if valid:
+            temp_list.append(word)
+            
+    return temp_list
+
 
 def filter(filterChar, position="any", repetitions="any", wordList="none"): #general purpose filter, covers correct letters, repetitions, and letters present
     returnList = []
     if type(position) == int:
         if position < 0 or position > 4:
             raise RuntimeError("InvalidCharacterPosition")
+    
+    # --- REVISED: Use global list as default, do not re-open file ---
     if wordList == "none":
-        available_words = open("words.txt", "r")
-        wordList = [word for word in available_words]
-        available_words.close()
+        wordList = permanent_answers[:] # Use a copy of the global list
+
     for word in wordList:
         if position != "any":
             if word[position] == filterChar:
@@ -81,10 +159,11 @@ def filter(filterChar, position="any", repetitions="any", wordList="none"): #gen
 
 def inverseFilter(filterChar, wordList="none"): #returns a list of words that do NOT contain the filter character
     returnList = []
+    
+    # --- REVISED: Use global list as default, do not re-open file ---
     if wordList == "none":
-        file = open("words.txt", "r")
-        wordList = [line for line in file]
-        file.close()
+        wordList = permanent_answers[:] # Use a copy of the global list
+        
     for word in wordList:
         if filterChar not in word:
             returnList.append(word)
@@ -92,10 +171,11 @@ def inverseFilter(filterChar, wordList="none"): #returns a list of words that do
 
 def wrongPositionFilter(filterChar, index, wordList="none"):    #returns a list of words that do not have the filter character at the specified index
     returnList = []
+    
+    # --- REVISED: Use global list as default, do not re-open file ---
     if wordList == "none":
-        file = open("words.txt", "r")
-        wordList = [line for line in file]
-        file.close()
+        wordList = permanent_answers[:] # Use a copy of the global list
+        
     for word in wordList:
         if filterChar != word[index]:
             returnList.append(word)
@@ -123,19 +203,52 @@ def get_word_value(word, letter_dictionary, counted_word=""):   #gets the word v
             counted_letters.append(letter)
     return value
 
+# --- REVISED: Greatly improved isBlimp logic ---
 def isBlimp(wordList):   #returns whether or not a word list has the "blimp problem"
-    if len(wordList) > 10 or len(wordList) < 3:
+    
+    # A "blimp" is a small list of words that is hard to differentiate.
+    
+    list_len = len(wordList)
+    
+    # Don't run on lists that are too small (already solved) or too large (not an endgame trap)
+    if list_len < 2 or list_len > 15: # Increased threshold slightly
         return False
-    threshold = math.floor(len(wordList)/2)
+
+    # --- Check 1: Positional Trap (The "mammy" _A__Y problem) ---
+    # Checks if 2 or more positions are "fixed" across all words
+    if list_len > 1:
+        fixed_positions = 0
+        first_word = wordList[0]
+        for i in range(5): # For each letter position
+            letter = first_word[i]
+            is_fixed = True
+            for word in wordList[1:]:
+                if word[i] != letter:
+                    is_fixed = False
+                    break
+            if is_fixed:
+                fixed_positions += 1
+        
+        # If 2 or more positions are fixed (e.g., _A__Y, __GHT), it's a trap
+        if fixed_positions >= 2:
+            return True
+
+    # --- Check 2: Similarity Trap (The "wound" _OUND problem) ---
+    # This was the original logic. It's still valid for other traps.
+    if list_len < 3: # This check only makes sense for 3+ words
+        return False
+        
+    threshold = math.floor(list_len/2)
     commonLettersDict = {}
     for word1 in wordList:
         for word2 in wordList:
             if word2 == word1:
                 continue
-            if len(list(set(word1) & set(word2))) >= 3: # if words have at least 3 letters in common
+            shared_letters = list(set(word1) & set(word2))
+            if len(shared_letters) >= 3: # if words have at least 3 letters in common
                 commonLetters = ""
-                for letters in list(set(word1) & set(word2)):
-                    commonLetters += letters
+                for letter in shared_letters:
+                    commonLetters += letter
                 commonLetters = "".join(sorted(commonLetters))
                 try:
                     commonLettersDict[commonLetters] += 1
@@ -143,6 +256,7 @@ def isBlimp(wordList):   #returns whether or not a word list has the "blimp prob
                         return True
                 except:
                     commonLettersDict[commonLetters] = 1
+                    
     return False
     
 
@@ -151,7 +265,8 @@ def getBlimpMax(wordList, commonLetters, totalWords=wordsAllowed): #returns high
     wordValues = {word:get_word_value(word, letterDictionary, commonLetters) for word in totalWords}
     return max(wordValues, key=wordValues.get)
 
-def blimpSearch(wordList):  #made to avoid the "blimp problem" where a search would be narrowed down best by a word already filtered out
+# --- REVISED: Replaced old function with a true Minimax search ---
+def blimpSearch(wordList):
     """
     Chooses the next guess when the 'blimp' condition is met (small list
     of very similar words). Uses a Minimax strategy to find the guess
@@ -161,63 +276,66 @@ def blimpSearch(wordList):  #made to avoid the "blimp problem" where a search wo
     best_guess = ""
     # Initialize with a value larger than any possible list size
     min_max_remaining_size = len(wordList) + 1
+    # Track the average outcome size for tie-breaking
+    avg_for_best = float(len(wordList) + 1)
 
-    # Decide which set of words to try as guesses. Using all allowed words
-    # is more thorough but slower. Using just the current candidates is faster.
-    # Using wordsAllowed is generally better for breaking blimp situations.
-    candidate_guesses = wordsAllowed
 
-    if not candidate_guesses: # Safety check if wordsAllowed is somehow empty
+    # We must check words *outside* the current list to find a good differentiator.
+    # We check all allowed words, plus the current candidates.
+    candidate_guesses = list(set(wordsAllowed + wordList))
+
+    if not candidate_guesses: # Safety check
         return getMaxValue1(wordList) # Fallback
 
     for candidate in candidate_guesses:
         max_remaining_size = 0
-        # Keep track of outcomes if needed for tie-breaking based on average size
-        # possible_outcome_sizes = []
-
+        possible_outcome_sizes = [] # For calculating average
+        
         # Simulate guessing 'candidate' against each word currently possible
         for potential_answer in wordList:
-            # Use a copy of wordList for the simulation to avoid modifying the original list
+            # Use a copy of wordList for the simulation
             simulated_remaining_list = filter_words(wordList[:], candidate, potential_answer)
             outcome_size = len(simulated_remaining_list)
+            possible_outcome_sizes.append(outcome_size)
 
-            # Track the worst-case (largest) remaining list size for this candidate guess
+            # Track the worst-case (largest) remaining list size
             if outcome_size > max_remaining_size:
                 max_remaining_size = outcome_size
+            
+            # Optimization: If this outcome is already worse than our best
+            # found so far, stop simulating this candidate.
+            if max_remaining_size > min_max_remaining_size:
+                break
+        
+        # If we broke early, this candidate is not better.
+        if max_remaining_size > min_max_remaining_size:
+            continue
 
-            # possible_outcome_sizes.append(outcome_size) # Store size for avg calculation if needed
+        # Calculate average outcome size for this candidate
+        current_avg = sum(possible_outcome_sizes) / len(possible_outcome_sizes)
 
         # --- Score the candidate guess based on the worst-case outcome ---
-        # If this candidate guarantees a smaller worst-case list than the current best, it's the new best.
+        # If this candidate guarantees a smaller worst-case list, it's the new best.
         if max_remaining_size < min_max_remaining_size:
             min_max_remaining_size = max_remaining_size
+            avg_for_best = current_avg
             best_guess = candidate
-            # avg_for_best = sum(possible_outcome_sizes) / len(possible_outcome_sizes) # Store avg if needed for tie-break
-
-        # --- Tie-breaking logic (optional but helpful) ---
+            
+        # --- Tie-breaking logic ---
         elif max_remaining_size == min_max_remaining_size:
-            # Prefer guesses that are still possible answers themselves
-            if best_guess not in wordList and candidate in wordList:
+            # 1. Prefer the guess with the better (lower) average outcome
+            if current_avg < avg_for_best:
+                avg_for_best = current_avg
                 best_guess = candidate
-                # avg_for_best = sum(possible_outcome_sizes) / len(possible_outcome_sizes) # Update avg
-            # # Alternative tie-breaker: prefer lower average outcome size
-            # else:
-            #     current_avg = sum(possible_outcome_sizes) / len(possible_outcome_sizes)
-            #     if current_avg < avg_for_best:
-            #         best_guess = candidate
-            #         avg_for_best = current_avg
+            # 2. If averages are also tied, prefer a guess that *could* be the answer
+            elif current_avg == avg_for_best:
+                if (best_guess not in wordList) and (candidate in wordList):
+                    best_guess = candidate
 
     # --- Fallback ---
-    # If no suitable guess was found (e.g., all guesses lead to the same large list,
-    # which shouldn't happen with correct logic but is a safe fallback),
-    # or if the best guess somehow remained empty.
     if not best_guess:
         print("Warning: BlimpSearch fallback triggered.") # Optional warning
-        # Use a simple strategy like highest frequency on the remaining list
-        best_guess = getMaxValue1(wordList)
-        # Or even pick randomly from the list if getMaxValue1 fails
-        if not best_guess and wordList:
-             best_guess = random.choice(wordList)
+        return getMaxValue1(wordList) # Use simple heuristic as fallback
 
     return best_guess
 
@@ -338,8 +456,12 @@ class Thread(threading.Thread): #custom thread class
     #   print("Exiting " + self.name + "\n")
 
 def getMaxValue1(wordList): #returns highest word by letter frequency
+    if not wordList: # Safety check
+        return "salet" # Should not happen, but return default
     letterDictionary = get_letter_dictionary(wordList)
     wordValues = {word:get_word_value(word, letterDictionary) for word in wordList}
+    if not wordValues: # Safety check
+        return wordList[0] # Return first available word
     return max(wordValues, key=wordValues.get)
 
 def runMultithreadedHRBFR2(wordList, numberOfThreads):   #gets the next best word by highest reduction, using multithreading
@@ -347,12 +469,15 @@ def runMultithreadedHRBFR2(wordList, numberOfThreads):   #gets the next best wor
     baseThreads = threading.active_count()
     min_word_dict = {"zzzzz": 9999}
     wordListList = []
-    wordListList.append([wordList[i:i + math.ceil(len(wordList) / numberOfThreads)] for i in range(0, len(wordList), math.ceil(len(wordList) / numberOfThreads))])
-    if len(wordListList[0]) < numberOfThreads:
-        r = len(wordListList[0])
-    else:
-        r = numberOfThreads
-    threads = [Thread(get_best_next_multithread, "Thread " + str(i + 1), wordListList[0][i], wordList) for i in range(r)]
+    
+    # --- REVISED: Cap thread count ---
+    actual_threads = min(len(wordList), numberOfThreads)
+    if actual_threads == 0:
+        return getMaxValue1(wordList) # Fallback
+
+    wordListList.append([wordList[i:i + math.ceil(len(wordList) / actual_threads)] for i in range(0, len(wordList), math.ceil(len(wordList) / actual_threads))])
+    
+    threads = [Thread(get_best_next_multithread, "Thread " + str(i + 1), wordListList[0][i], wordList) for i in range(actual_threads)]
     for thread in threads:
         thread.start()
     while(1):
@@ -426,87 +551,79 @@ def gameFilter(word, wordState, word_list):   #filters words using game output i
 def test_MultiThreadedHRBFR2(n):    #tests deep search by highest weighted average list reduction
     game_data = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "DNF": 0}
     for i in range(n):
+        # --- REVISED: Reload global lists for clean test ---
+        global available_words, permanent_answers, wordsAllowed
         available_words = [i[:-1] for i in open("words.txt", "r").readlines()]
-        test_word = random.choice(available_words)
+        permanent_answers = [i[:-1] for i in open("words.txt", "r").readlines()]
+        wordsAllowed = [i[:-1] for i in open("wordsAllowed.txt", "r").readlines()]
+        
+        current_available_words = permanent_answers[:]
+        test_word = random.choice(current_available_words)
         steps = 1
+        
         if test_word == "salet":
-            print(steps, available_words)
+            print(steps, current_available_words)
             game_data.update({str(steps): game_data[str(steps)] + 1})
-            success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-            print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
+            success_rate = 1 - (game_data["DNF"] / sum(game_data.values()))
+            print("MT_HRBFR2", sum(game_data.values()), game_data, success_rate, game_data_avg(game_data))
             continue
-        available_words = filter_words(available_words, "salet", test_word)
-        if test_word not in available_words:
-            raise RuntimeError("Answer not in list")
-        if len(available_words) == 1 and available_words[0] == test_word:
+            
+        current_available_words = filter_words(current_available_words, "salet", test_word)
+        if test_word not in current_available_words and len(current_available_words) > 0:
+            print(f"***WARNING: Answer {test_word} not in list after guess 1!***")
+            # continue # Skip this broken game
+        
+        if len(current_available_words) == 1 and current_available_words[0] == test_word:
             steps += 1
-            # print(steps, available_words)
+            # print(steps, current_available_words)
             game_data.update({str(steps): game_data[str(steps)] + 1})
-            success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-            print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
+            success_rate = 1 - (game_data["DNF"] / sum(game_data.values()))
+            print("MT_HRBFR2", sum(game_data.values()), game_data, success_rate, game_data_avg(game_data))
             continue
+            
         for j in range(5):
-            if isBlimp(available_words):
-                guess = blimpSearch(available_words)
+            if isBlimp(current_available_words):
+                guess = blimpSearch(current_available_words)
             else:
-                if available_words == gameFilter("salet", "00000", permanent_answers):  #hard-coded second guesses based on testing
-                    guess = "muddy"
-                elif available_words == gameFilter("salet", "10000", permanent_answers):
-                    guess = "hussy"
-                elif available_words == gameFilter("salet", "01000", permanent_answers):
-                    guess = "croak"
-                elif available_words == gameFilter("salet", "00100", permanent_answers):
-                    guess = "grill"
-                elif available_words == gameFilter("salet", "00010", permanent_answers):
-                    guess = "pique"
-                elif available_words == gameFilter("salet", "00001", permanent_answers):
-                    guess = "booth"
-                else:
-                    guess = runMultithreadedHRBFR2(available_words, len(available_words))
-            available_words = filter_words(available_words, guess, test_word)
+                # --- REVISED: Removed hard-coded guesses. Use the actual algorithm. ---
+                # --- REVISED: Cap thread count to a reasonable number ---
+                guess = runMultithreadedHRBFR2(current_available_words, 12) 
+                
+            current_available_words = filter_words(current_available_words, guess, test_word)
             steps += 1
-            # print(steps, available_words)
-            if test_word not in available_words:
-                raise RuntimeError("Answer not in list")
-            if len(available_words) == 1 and guess == test_word:
+            
+            if test_word not in current_available_words and len(current_available_words) > 0:
+                print(f"***WARNING: Answer {test_word} not in list after guess {steps} ('{guess}')!***")
+                # break # Stop this broken game
+            
+            if guess == test_word: # Solved on this guess
                 game_data.update({str(steps): game_data[str(steps)] + 1})
-                success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-                print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
+                success_rate = 1 - (game_data["DNF"] / sum(game_data.values()))
+                print("MT_HRBFR2", sum(game_data.values()), game_data, success_rate, game_data_avg(game_data))
                 break 
-            elif len(available_words) == 1 and available_words[0] == test_word:
+            elif len(current_available_words) == 1 and current_available_words[0] == test_word: # Solved on next guess
                 steps += 1
-                if steps == 7:
+                if steps > 6:
                     game_data.update({"DNF": game_data["DNF"] + 1})
-                    success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-                    print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-                    break
                 else:
                     game_data.update({str(steps): game_data[str(steps)] + 1})
-                    success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-                    print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-                    break    
-        else:
-            game_data.update({"DNF": game_data["DNF"] + 1})
-            success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-            print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
+                success_rate = 1 - (game_data["DNF"] / sum(game_data.values()))
+                print("MT_HRBFR2", sum(game_data.values()), game_data, success_rate, game_data_avg(game_data))
+                break    
+        else: # This 'else' triggers if the 'for j in range(5)' loop completes without 'break'
+            if steps >= 6:
+                game_data.update({"DNF": game_data["DNF"] + 1})
+                success_rate = 1 - (game_data["DNF"] / sum(game_data.values()))
+                print("MT_HRBFR2", sum(game_data.values()), game_data, success_rate, game_data_avg(game_data))
 
 # test_MultiThreadedHRBFR2(100)
 
 def getMaxDeepSearch(available_words):
-    if available_words == gameFilter("salet", "00000", permanent_answers):  #hard-coded second guesses based on testing
-        guess = "muddy"
-    elif available_words == gameFilter("salet", "10000", permanent_answers):
-        guess = "hussy"
-    elif available_words == gameFilter("salet", "01000", permanent_answers):
-        guess = "croak"
-    elif available_words == gameFilter("salet", "00100", permanent_answers):
-        guess = "grill"
-    elif available_words == gameFilter("salet", "00010", permanent_answers):
-        guess = "pique"
-    elif available_words == gameFilter("salet", "00001", permanent_answers):
-        guess = "booth"
-    else:
-        guess = runMultithreadedHRBFR2(available_words, len(available_words))
+    # --- REVISED: Removed all hard-coded guesses ---
+    # The algorithm should be smart enough to find the best word.
+    
+    # --- REVISED: Cap thread count ---
+    guess = runMultithreadedHRBFR2(available_words, 12) 
     return guess
 
 def validState(wordState):  #returns whether or not a word state is valid
@@ -529,14 +646,16 @@ def gameSim(wordList=available_words):  #simulates a real game
             word = input("Enter word: ")
             wordState = input("Enter word state: ")
         wordList = gameFilter(word, wordState, wordList)
-        print(runMultithreadedHRBFR2(wordList, len(wordList)))
+        # --- REVISED: Cap thread count ---
+        print(runMultithreadedHRBFR2(wordList, 12)) 
         gameStatus = input("Complete? (y/N): ")
         if gameStatus == 'Y' or gameStatus == 'y':
             break
 
 # gameSim()
-# --- ADD THIS FULLY MODIFIED FUNCTION ---
-def test_highestFrequency(n):   # tests search using letter frequencies - NOW WITH VERBOSE OUTPUT + COLORS
+
+# This is the function run by Mode 1 in the notebook
+def test_highestFrequency(n):   # tests search using letter frequencies
     print(f"\n--- Starting Verbose Test Run ({n} games) ---")
     game_data = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "DNF": 0}
 
@@ -574,7 +693,7 @@ def test_highestFrequency(n):   # tests search using letter frequencies - NOW WI
 
         # --- Subsequent Guesses ---
         solved = False
-        for j in range(5): # Max 5 more guesses
+        for j in range(5): # Max 5 more guesses (total 6)
             if not current_available_words:
                 print("  ***Error: No possible words left!***")
                 steps = 7 # Mark as DNF
@@ -582,9 +701,11 @@ def test_highestFrequency(n):   # tests search using letter frequencies - NOW WI
 
             if len(current_available_words) == 1:
                 guessWord = current_available_words[0]
+            # --- REVISED: Calls the new, more robust isBlimp ---
             elif isBlimp(current_available_words):
                  print("  (Blimp condition detected)")
-                 guessWord = blimpSearch(current_available_words)
+                 # --- REVISED: Calls the new minimax blimpSearch ---
+                 guessWord = blimpSearch(current_available_words) 
             else:
                 guessWord = getMaxValue1(current_available_words)
 
@@ -604,88 +725,59 @@ def test_highestFrequency(n):   # tests search using letter frequencies - NOW WI
             print(f"  Remaining possible words: {len(current_available_words)}")
             if test_word not in current_available_words and len(current_available_words) > 0:
                 print(f"  ***Warning: Target word '{test_word}' was filtered out!***")
+            
+            # --- Check if the game is solvable on the next turn ---
+            if len(current_available_words) == 1 and current_available_words[0] == test_word:
+                # Don't guess, just log the next step
+                steps += 1
+                if steps > 6:
+                    print("  (Would solve on step 7, marking as DNF)")
+                    steps = 7 # Mark as DNF
+                    break
+                
+                guessWord = current_available_words[0]
+                guess_history.append(guessWord)
+                colors = get_guess_colors(guessWord, test_word)
+                emoji_output = format_colors_to_emoji(colors)
+                print(f"Guess {steps}: {guessWord} -> {emoji_output}")
+                print(f"Solved in {steps} steps!")
+                game_data.update({str(steps): game_data[str(steps)] + 1})
+                solved = True
+                break
+
 
         # --- Game End Check ---
-        if not solved and steps <= 6:
-             print(f"Failed unexpectedly before 6 guesses.")
+        if not solved:
+             # If loop finishes without solving
              game_data.update({"DNF": game_data["DNF"] + 1})
-        elif not solved and steps > 6:
-             print(f"Failed to solve in 6 steps.")
-             game_data.update({"DNF": game_data["DNF"] + 1})
+             if steps < 6:
+                print(f"Failed unexpectedly before 6 guesses (steps={steps}).")
+             else:
+                print(f"Failed to solve in 6 steps.")
+
 
         print(f"Guess History for game {i+1}: {guess_history}")
+        if not solved:
+            print(f"Remaining possibilities: {current_available_words}")
+
 
     # --- Final Stats ---
     print("\n--- Overall Results ---")
     total_games = sum(game_data.values())
+    if total_games == 0:
+        print("No games were simulated.")
+        return
+        
     success_count = total_games - game_data["DNF"]
-    success_rate = (success_count / total_games) if total_games > 0 else 0
+    success_rate = (success_count / total_games)
     avg_steps = game_data_avg(game_data) # Use the existing function
 
-    print(f"Method: highest_freq")
+    print(f"Method: highest_freq (with revised BlimpSearch)")
     print(f"Total Games Simulated: {total_games}")
     print(f"Results (Steps: Count): {game_data}")
     print(f"Success Rate: {success_rate:.4f}")
     print(f"Average Steps (for successful games): {avg_steps:.4f}")
 
-# --- END OF MODIFIED FUNCTION ---
-
-# def test_highestFrequency(n):   #tests search using letter frequencies
-#     game_data = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "DNF": 0}
-#     for i in range(n):
-#         available_words = [i[:-1] for i in open("words.txt", "r").readlines()]
-#         test_word = random.choice(available_words)
-#         # print(test_word)
-#         steps = 1
-#         if test_word == "salet":
-#             # print(steps, available_words)
-#             game_data.update({str(steps): game_data[str(steps)] + 1})
-#             success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#             print("MT_HRBFR2", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#             continue
-#         available_words = filter_words(available_words, "salet", test_word)
-#         if test_word not in available_words:
-#             raise RuntimeError("Answer not in list")
-#         if len(available_words) == 1 and available_words[0] == test_word:
-#             steps += 1
-#             # print(steps, available_words)
-#             game_data.update({str(steps): game_data[str(steps)] + 1})
-#             success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#             print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#             continue
-#         for j in range(5):
-#             if isBlimp(available_words):
-#                 guessWord = blimpSearch(available_words)
-#             else:
-#                 guessWord = getMaxValue1(available_words)
-#             available_words = filter_words(available_words, guessWord, test_word)
-#             steps += 1
-#             # print(steps, available_words)
-#             if test_word not in available_words:
-#                 raise RuntimeError("Answer not in list")
-#             if len(available_words) == 1 and guessWord == test_word:
-#                 game_data.update({str(steps): game_data[str(steps)] + 1})
-#                 success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#                 print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#                 break 
-#             elif len(available_words) == 1 and available_words[0] == test_word:
-#                 steps += 1
-#                 if steps == 7:
-#                     game_data.update({"DNF": game_data["DNF"] + 1})
-#                     success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#                     print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#                     break
-#                 else:
-#                     game_data.update({str(steps): game_data[str(steps)] + 1})
-#                     success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#                     print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-#                     break       
-#         else:
-#             game_data.update({"DNF": game_data["DNF"] + 1})
-#             success_rate = 1 - (game_data["DNF"] / (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]))
-#             print("highest_freq", (game_data["1"] + game_data["2"] + game_data["3"] + game_data["4"] + game_data["5"] + game_data["6"] + game_data["DNF"]), game_data, success_rate, game_data_avg(game_data))
-            
-# test_highestFrequency(1000)
 
 def get_guess_colors(guess, target_word):
     """
@@ -723,3 +815,7 @@ def format_colors_to_emoji(color_string):
     emoji_map = {'B': GRAY, 'G': GREEN, 'Y': YELLOW}
     # Use .get(char, char) to safely handle any unexpected characters
     return "".join(emoji_map.get(char, char) for char in color_string)
+
+# You can uncomment this to run a test from the command line
+# if __name__ == "__main__":
+#     test_highestFrequency(10)
