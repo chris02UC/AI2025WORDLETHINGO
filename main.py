@@ -742,7 +742,7 @@ def get_guess_colors(guess, target_word):
                 colors[i] = 'Y'
                 # Mark the first available instance of this letter in target as used
                 target_list[target_list.index(guess[i])] = None
-            else:F
+            else:
                 colors[i] = 'B'
 
     return "".join(colors) # Return as a single string like "BGYBB"
