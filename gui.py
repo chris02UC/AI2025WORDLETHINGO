@@ -9,7 +9,6 @@ import time
 
 import main as gameEngine
 
-# --- Constants ---
 COLOR_BG = "#FFFFFF"
 COLOR_DEFAULT = "#D3D6DA"
 COLOR_GRAY = "#787C7E"
@@ -28,7 +27,6 @@ class WordleApp:
         self.root.title("Wordle AI Suite")
         self.root.geometry("850x600")
 
-        # --- Load Word Lists ---
         try:
             gameEngine._initialize_word_lists()
             self.permanent_answers = gameEngine.permanent_answers[:]
@@ -40,17 +38,14 @@ class WordleApp:
             self.root.destroy()
             return
             
-        # --- Create Tabbed Interface ---
         self.notebook = ttk.Notebook(root)
         
-        # --- Create Tabs ---
-        self.mode1_tab = Mode1Tab(self.notebook, self) # AI vs Random
-        self.mode2_tab = Mode2Tab(self.notebook, self) # Solve Specific
-        self.mode3_tab = Mode3Tab(self.notebook, self) # Human vs AI
-        self.mode4_tab = Mode4Tab(self.notebook, self) # AI Helper
-        self.mode5_tab = Mode5Tab(self.notebook, self) # Full Sim
+        self.mode1_tab = Mode1Tab(self.notebook, self)
+        self.mode2_tab = Mode2Tab(self.notebook, self)
+        self.mode3_tab = Mode3Tab(self.notebook, self)
+        self.mode4_tab = Mode4Tab(self.notebook, self)
+        self.mode5_tab = Mode5Tab(self.notebook, self)
         
-        # --- Add Tabs to Notebook (in correct order) ---
         self.notebook.add(self.mode1_tab, text="Mode 1: AI vs. Random")
         self.notebook.add(self.mode2_tab, text="Mode 2: AI vs. Specific")
         self.notebook.add(self.mode3_tab, text="Mode 3: Human vs. AI")
@@ -59,7 +54,6 @@ class WordleApp:
         
         self.notebook.pack(expand=True, fill="both", padx=10, pady=10)
 
-# --- Helper Functions for Grids ---
 def create_grid(parent_frame):
     grid_labels = []
     for r in range(6):
@@ -89,8 +83,41 @@ def clear_grid(grid_labels):
             grid_labels[r][c].config(text="", bg=COLOR_DEFAULT, fg=COLOR_BLACK)
 
 
-# --- Base Tab for Modes 1, 2, 5 (Text Output) ---
-class TextOutputTab(ttk.Frame):
+class ScrollableTab(ttk.Frame):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+
+        self.canvas = tk.Canvas(self, borderwidth=0, background=COLOR_BG)
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        
+        self.scrollable_frame = ttk.Frame(self.canvas)
+        
+        style = ttk.Style()
+        style.configure("Scrollable.TFrame", background=COLOR_BG)
+        self.scrollable_frame.configure(style="Scrollable.TFrame")
+
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        self.canvas_window = self.canvas.create_window(
+            (0, 0),
+            window=self.scrollable_frame,
+            anchor="nw"
+        )
+
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.scrollbar.pack(side="right", fill="y")
+
+        self.scrollable_frame.bind("<Configure>", self.on_frame_configure)
+        self.canvas.bind("<Configure>", self.on_canvas_configure)
+
+    def on_frame_configure(self, event=None):
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def on_canvas_configure(self, event=None):
+        self.canvas.itemconfig(self.canvas_window, width=event.width)
+
+
+class TextOutputTab(ScrollableTab):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
@@ -98,10 +125,9 @@ class TextOutputTab(ttk.Frame):
         self.thread = None
 
     def create_text_output(self):
-        self.output_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, font=("Courier New", 10))
+        self.output_text = scrolledtext.ScrolledText(self.scrollable_frame, wrap=tk.WORD, font=("Courier New", 10))
         self.output_text.pack(expand=True, fill='both', padx=10, pady=10)
         self.output_text.config(state=tk.DISABLED)
-        # Bind event for thread completion
         self.output_text.bind("<<ThreadDone>>", self.on_thread_done)
 
     def run_function_in_thread(self, target_function, *args):
@@ -136,24 +162,23 @@ class TextOutputTab(ttk.Frame):
         self.output_text.config(state=tk.DISABLED)
 
 
-# --- Base Tab for Modes 1 & 2 (Visual AI Solver) ---
-class AIGameTab(ttk.Frame):
+class AIGameTab(ScrollableTab):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
         
-        self.control_frame = ttk.Frame(self)
+        self.control_frame = ttk.Frame(self.scrollable_frame)
         self.control_frame.pack(fill='x', padx=10, pady=10)
         
-        self.grid_frame = ttk.Frame(self)
+        self.grid_frame = ttk.Frame(self.scrollable_frame)
         self.grid_frame.pack(pady=10)
         
         self.ai_grid_labels = create_grid(self.grid_frame)
         
-        self.status_label = ttk.Label(self, text="Start a game to begin.", font=STATUS_FONT)
+        self.status_label = ttk.Label(self.scrollable_frame, text="Start a game to begin.", font=STATUS_FONT)
         self.status_label.pack(pady=10)
         
-        self.next_step_button = ttk.Button(self, text="Next Step", command=self.run_ai_step, state=tk.DISABLED)
+        self.next_step_button = ttk.Button(self.scrollable_frame, text="Next Step", command=self.run_ai_step, state=tk.DISABLED)
         self.next_step_button.pack(pady=5)
         
         self.game_over = True
@@ -211,7 +236,6 @@ class AIGameTab(ttk.Frame):
         self.ai_guesses.append(ai_guess)
         colors_str = gameEngine.get_guess_colors(ai_guess, self.target_word)
         
-        # Update GUI
         update_grid_row(self.ai_grid_labels, self.ai_row, ai_guess, colors_str)
         self.ai_row += 1
 
@@ -231,7 +255,6 @@ class AIGameTab(ttk.Frame):
         self.game_over = True
         self.next_step_button.config(state=tk.DISABLED)
 
-# --- Mode 1: AI vs. Random ---
 class Mode1Tab(AIGameTab):
     def __init__(self, parent, app):
         super().__init__(parent, app)
@@ -244,7 +267,6 @@ class Mode1Tab(AIGameTab):
         self.start_game_logic(target)
         self.status_label.config(text="New random word selected. Press 'Next Step'.")
 
-# --- Mode 2: AI vs. Specific ---
 class Mode2Tab(AIGameTab):
     def __init__(self, parent, app):
         super().__init__(parent, app)
@@ -264,23 +286,20 @@ class Mode2Tab(AIGameTab):
             
     def end_game(self):
         super().end_game()
-        # Re-enable controls
         self.word_entry.config(state=tk.NORMAL)
         self.start_button.config(state=tk.NORMAL)
 
 
-# --- Mode 3: Human vs. AI ---
-class Mode3Tab(ttk.Frame):
+class Mode3Tab(ScrollableTab):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
-        self.timer_job = None # Holds the 'after' job ID
-        self.clock_job = None
+        self.timer_job = None
         
-        self.title_label = tk.Label(self, text="HUMAN vs. AI", font=TITLE_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
+        self.title_label = tk.Label(self.scrollable_frame, text="HUMAN vs. AI", font=TITLE_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
         self.title_label.pack(pady=10)
 
-        self.game_frame = tk.Frame(self, bg=COLOR_BG)
+        self.game_frame = tk.Frame(self.scrollable_frame, bg=COLOR_BG)
         self.game_frame.pack(pady=10)
 
         self.human_frame = tk.Frame(self.game_frame, bg=COLOR_BG, padx=10)
@@ -298,12 +317,10 @@ class Mode3Tab(ttk.Frame):
         self.human_grid_labels = create_grid(self.human_grid_frame)
         self.ai_grid_labels = create_grid(self.ai_grid_frame)
 
-        self.input_frame = tk.Frame(self, bg=COLOR_BG)
-        # ... this line should already exist
+        self.input_frame = tk.Frame(self.scrollable_frame, bg=COLOR_BG)
         self.input_frame.pack(pady=10)
 
-        # --- ADD THIS NEW BLOCK ---
-        self.difficulty_frame = tk.Frame(self, bg=COLOR_BG)
+        self.difficulty_frame = tk.Frame(self.scrollable_frame, bg=COLOR_BG)
         self.difficulty_frame.pack(pady=5)
         
         tk.Label(self.difficulty_frame, text="AI Difficulty:", font=STATUS_FONT, bg=COLOR_BG).pack(side=tk.LEFT, padx=5)
@@ -313,13 +330,12 @@ class Mode3Tab(ttk.Frame):
             self.difficulty_frame, 
             textvariable=self.difficulty_var,
             values=["Easy", "Medium", "Hard"],
-            state="readonly", # Prevents user from typing a custom value
+            state="readonly",
             width=10
         )
         self.difficulty_selector.pack(side=tk.LEFT, padx=5)
-        # --- END OF NEW BLOCK ---
-# --- ADD THIS NEW BLOCK ---
-        self.vision_frame = tk.Frame(self, bg=COLOR_BG)
+
+        self.vision_frame = tk.Frame(self.scrollable_frame, bg=COLOR_BG)
         self.vision_frame.pack(pady=5)
         
         tk.Label(self.vision_frame, text="Player Vision:", font=STATUS_FONT, bg=COLOR_BG).pack(side=tk.LEFT, padx=5)
@@ -333,37 +349,29 @@ class Mode3Tab(ttk.Frame):
             width=10
         )
         self.vision_selector.pack(side=tk.LEFT, padx=5)
-        # --- END OF NEW BLOCK ---
-        # ... this line should already exist
-        self.status_label = tk.Label(self, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
+
+        self.status_label = tk.Label(self.scrollable_frame, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
 
         tk.Label(self.input_frame, text="Enter Guess:", font=STATUS_FONT, bg=COLOR_BG).pack(side=tk.LEFT, padx=5)
         self.guess_entry = tk.Entry(self.input_frame, width=7, font=GRID_FONT, justify='center')
         self.guess_entry.pack(side=tk.LEFT, padx=5)
         self.guess_entry.bind("<Return>", self.on_human_guess)
         
-        
-
-        self.status_label = tk.Label(self, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
+        self.status_label = tk.Label(self.scrollable_frame, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
         self.status_label.pack(pady=5)
         
-        # --- NEW TIMER UI ---
-        self.timer_frame = ttk.Frame(self)
+        self.timer_frame = ttk.Frame(self.scrollable_frame)
         self.timer_frame.pack(pady=5)
         
         ttk.Label(self.timer_frame, text="Turn Timer (sec):", font=STATUS_FONT).pack(side=tk.LEFT, padx=5)
         self.timer_spinbox = ttk.Spinbox(self.timer_frame, from_=0, to=120, width=4, font=STATUS_FONT)
-        self.timer_spinbox.set(0) # Default to 0 (off)
+        self.timer_spinbox.set(0)
         self.timer_spinbox.pack(side=tk.LEFT, padx=5)
         
         self.timer_label = ttk.Label(self.timer_frame, text="", font=(STATUS_FONT[0], STATUS_FONT[1], "bold"), foreground="red")
         self.timer_label.pack(side=tk.LEFT, padx=10)
 
-        self.clock_label = ttk.Label(self.timer_frame, text="", font=STATUS_FONT, foreground="blue") # <-- NEW
-        self.clock_label.pack(side=tk.LEFT, padx=10) # <-- NEW
-        # --- END NEW TIMER UI ---
-
-        self.reset_button = ttk.Button(self, text="New Game", command=self.start_new_game)
+        self.reset_button = ttk.Button(self.scrollable_frame, text="New Game", command=self.start_new_game)
         self.reset_button.pack(pady=10)
 
         self.start_new_game()
@@ -403,27 +411,10 @@ class Mode3Tab(ttk.Frame):
         else:
             self.timer_job = self.app.root.after(1000, self.countdown)
 
-    # --- NEW CLOCK FUNCTIONS ---
-    def update_clock(self):
-        """Updates the clock label with the current time."""
-        current_time = time.strftime("%H:%M:%S")
-        self.clock_label.config(text=current_time)
-        # Schedule this function to run again after 1000ms (1 second)
-        self.clock_job = self.app.root.after(1000, self.update_clock)
-
-    def stop_clock(self):
-        """Stops the clock update loop."""
-        if self.clock_job:
-            self.app.root.after_cancel(self.clock_job)
-            self.clock_job = None
-        self.clock_label.config(text="")
-    # --- END NEW CLOCK FUNCTIONS ---
-
     def start_new_game(self):
-        self.stop_turn_timer() # MODIFIED
+        self.stop_turn_timer()
         self.game_over = False
         self.target_word = random.choice(self.app.permanent_answers)
-        # print(f"DEBUG: Target word is {self.target_word}") 
 
         self.human_row = 0
         self.ai_row = 0
@@ -439,33 +430,28 @@ class Mode3Tab(ttk.Frame):
         self.guess_entry.focus()
         self.difficulty_selector.config(state="readonly")
         self.vision_selector.config(state="readonly")
-        self.start_turn_timer() # MODIFIED
-        self.update_clock()
+        self.start_turn_timer()
 
     def on_human_guess(self, event=None):
-        self.stop_turn_timer() # MODIFIED
-        
         if self.game_over:
             return
 
-        # --- ADD THIS BLOCK ---
-        # Disable selector after first guess
         if self.human_row == 0:
             self.difficulty_selector.config(state=tk.DISABLED)
             self.vision_selector.config(state=tk.DISABLED)
-        # --- END OF BLOCK ---
 
         guess = self.guess_entry.get().lower().strip()
         self.guess_entry.delete(0, tk.END)
 
         if len(guess) != 5:
             self.status_label.config(text="Guess must be 5 letters.")
-            self.start_turn_timer() # Restart timer if guess was invalid
             return
         if guess not in self.app.all_allowed_words:
             self.status_label.config(text=f"'{guess}' is not in the word list.")
-            self.start_turn_timer() # Restart timer if guess was invalid
             return
+
+        # Valid guess, so stop the timer
+        self.stop_turn_timer()
 
         colors_str = gameEngine.get_guess_colors(guess, self.target_word)
         update_grid_row(self.human_grid_labels, self.human_row, guess, colors_str)
@@ -480,61 +466,49 @@ class Mode3Tab(ttk.Frame):
             return
 
         self.status_label.config(text="AI is thinking...")
-        self.guess_entry.config(state=tk.DISABLED) # Disable entry during AI turn
+        self.guess_entry.config(state=tk.DISABLED)
         
         self.app.root.update_idletasks() 
         self.app.root.after(500, self.run_ai_turn) 
 
     def run_ai_turn(self):
-        difficulty = self.difficulty_var.get() # Get current difficulty
-        vision = self.vision_var.get()         # <-- GET VISION SETTING
+        difficulty = self.difficulty_var.get()
+        vision = self.vision_var.get()
         
         if self.ai_row == 0:
-            # --- First guess logic ---
             if difficulty == "Easy":
-                # Easy: Start with a random word
                 ai_guess = random.choice(self.ai_available_words)
             else:
-                # Medium/Hard: Start with the best word
                 ai_guess = "salet"
         else:
-            # --- Subsequent guess logic ---
             last_ai_guess = self.ai_guesses[-1]
             self.ai_available_words = gameEngine.filter_words(
                 self.ai_available_words, last_ai_guess, self.target_word
             )
             
             if not self.ai_available_words:
-                ai_guess = "salet" # Failsafe in case of word list error
+                ai_guess = "salet"
             elif len(self.ai_available_words) == 1:
-                ai_guess = self.ai_available_words[0] # Always guess the last word
+                ai_guess = self.ai_available_words[0]
             
-            # --- Difficulty-based choice ---
             elif difficulty == "Hard":
-                # Hard: Use optimal blimp/frequency search
                 if gameEngine.isBlimp(self.ai_available_words):
                     ai_guess = gameEngine.blimpSearch(self.ai_available_words)
                 else:
                     ai_guess = gameEngine.getMaxValue1(self.ai_available_words)
             else:
-                # Easy/Medium: Pick a random word from the *remaining possible* words
                 ai_guess = random.choice(self.ai_available_words)
         
         self.ai_guesses.append(ai_guess)
         ai_colors_str = gameEngine.get_guess_colors(ai_guess, self.target_word)
         
-        # --- NEW VISION LOGIC BLOCK ---
         if vision == "Full Vision":
-            # Normal: Show guess and colors
             update_grid_row(self.ai_grid_labels, self.ai_row, ai_guess, ai_colors_str)
         elif vision == "Half Blind":
-            # Show guess, but all colors are gray
-            all_gray_colors = "B" * 5 # "B" renders as COLOR_GRAY
+            all_gray_colors = "B" * 5
             update_grid_row(self.ai_grid_labels, self.ai_row, ai_guess, all_gray_colors)
         elif vision == "Blind":
-            # Do nothing. The grid row remains empty (default color).
             pass
-        # --- END OF NEW BLOCK ---
 
         self.ai_row += 1
 
@@ -543,47 +517,44 @@ class Mode3Tab(ttk.Frame):
             return
 
         self.status_label.config(text="Your turn.")
-        self.guess_entry.config(state=tk.NORMAL) # Re-enable entry
+        self.guess_entry.config(state=tk.NORMAL)
         self.guess_entry.focus()
-        self.start_turn_timer() # MODIFIED
+        self.start_turn_timer()
 
     def end_game(self, message):
-        self.stop_turn_timer() # MODIFIED
-        self.stop_clock()
+        self.stop_turn_timer()
         self.game_over = True
+        
         if self.vision_var.get() == "Blind" and self.ai_row > 0:
             self.status_label.config(text=f"{message} Revealing AI grid...")
-            
-            # Loop through the AI's stored guesses
             for i, guess in enumerate(self.ai_guesses):
-                # Re-calculate the colors for each guess
                 colors_str = gameEngine.get_guess_colors(guess, self.target_word)
-                # Update the grid row by row
                 update_grid_row(self.ai_grid_labels, i, guess, colors_str)
         else:
-            # Otherwise, just show the normal end message
             self.status_label.config(text=message)
-        # --- END OF NEW LOGIC ---
+            
         self.guess_entry.config(state=tk.DISABLED)
+        
+        self.difficulty_selector.config(state="readonly")
+        self.vision_selector.config(state="readonly")
+        self.timer_spinbox.config(state=tk.NORMAL)
 
 
-# --- Mode 4: AI Helper ---
-class Mode4Tab(ttk.Frame):
+class Mode4Tab(ScrollableTab):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
         
-        # --- UI Elements ---
-        self.grid_frame = ttk.Frame(self)
+        self.grid_frame = ttk.Frame(self.scrollable_frame)
         self.grid_frame.pack(pady=10)
         
         self.helper_grid_labels = create_grid(self.grid_frame)
         self.tile_feedback = []
         
-        self.status_label = ttk.Label(self, text="", font=STATUS_FONT)
+        self.status_label = ttk.Label(self.scrollable_frame, text="", font=STATUS_FONT)
         self.status_label.pack(pady=10)
         
-        self.control_frame = ttk.Frame(self)
+        self.control_frame = ttk.Frame(self.scrollable_frame)
         self.control_frame.pack(pady=5)
 
         self.submit_button = ttk.Button(self.control_frame, text="Submit Feedback", command=self.submit_feedback, state=tk.DISABLED)
@@ -592,7 +563,7 @@ class Mode4Tab(ttk.Frame):
         self.reset_button = ttk.Button(self.control_frame, text="New Game", command=self.start_new_helper)
         self.reset_button.pack(side=tk.LEFT, padx=10)
         
-        self.list_frame = ttk.LabelFrame(self, text="Possible Words", padding=10)
+        self.list_frame = ttk.LabelFrame(self.scrollable_frame, text="Possible Words", padding=10)
         self.list_frame.pack(expand=True, fill='both', padx=10, pady=10)
         
         self.word_list_text = scrolledtext.ScrolledText(self.list_frame, wrap=tk.WORD, font=("Courier New", 10))
@@ -613,7 +584,6 @@ class Mode4Tab(ttk.Frame):
         self.submit_button.config(state=tk.NORMAL)
 
     def display_ai_guess(self):
-        """Puts the AI guess on the current row and makes it clickable."""
         if self.game_over: return
         
         self.status_label.config(text=f"AI Suggests: {self.ai_guess.upper()}. Click tiles to set colors.")
@@ -621,13 +591,11 @@ class Mode4Tab(ttk.Frame):
         for c in range(5):
             label = self.helper_grid_labels[self.turn][c]
             label.config(text=self.ai_guess[c].upper(), bg=COLOR_GRAY, fg=COLOR_WHITE)
-            # Make this row's labels clickable
             label.bind("<Button-1>", lambda e, r=self.turn, col=c: self.on_tile_click(r, col))
         
         self.reset_row_feedback()
 
     def on_tile_click(self, row, col):
-        """Cycles the color of a clicked tile in the AI Helper."""
         if self.game_over or row != self.turn:
             return
 
@@ -677,7 +645,6 @@ class Mode4Tab(ttk.Frame):
             self.end_helper_game()
             return
 
-        # --- Filter and get next guess ---
         try:
             self.ai_available_words = gameEngine.gameFilter(self.ai_guess, feedback_num, self.ai_available_words)
             count = len(self.ai_available_words)
@@ -710,7 +677,6 @@ class Mode4Tab(ttk.Frame):
     def end_helper_game(self):
         self.game_over = True
         self.submit_button.config(state=tk.DISABLED)
-        # Unbind any remaining active tiles
         if self.turn < 6:
             for c in range(5):
                 self.helper_grid_labels[self.turn][c].unbind("<Button-1>")
@@ -724,13 +690,11 @@ class Mode4Tab(ttk.Frame):
         self.word_list_text.insert(tk.END, message)
         self.word_list_text.config(state=tk.DISABLED)
 
-# --- Mode 5: Full Simulation ---
 class Mode5Tab(TextOutputTab):
     def __init__(self, parent, app):
         super().__init__(parent, app)
         
-        # --- UI Elements ---
-        top_frame = ttk.Frame(self)
+        top_frame = ttk.Frame(self.scrollable_frame)
         top_frame.pack(fill='x', padx=10, pady=10)
         
         self.run_button = ttk.Button(top_frame, text="Run Full Simulation & Plot", command=self.run_sim)
@@ -755,13 +719,15 @@ class Mode5Tab(TextOutputTab):
         self.output_text.bind("<<ThreadDone>>", self.on_thread_done_mode5)
 
     def on_thread_done_mode5(self, event=None):
-        """Custom done handler to re-enable button."""
         self.on_thread_done()
         self.run_button.config(state=tk.NORMAL, text="Run Full Simulation & Plot")
 
 
-# --- Main execution ---
 if __name__ == "__main__":
     root = tk.Tk()
+    
+    style = ttk.Style(root)
+    style.configure("Scrollable.TFrame", background=COLOR_BG)
+
     app = WordleApp(root)
     root.mainloop()
