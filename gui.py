@@ -7,17 +7,16 @@ import re
 import threading
 import time
 
-# Import your existing main.py as a module
 import main as gameEngine
 
 # --- Constants ---
-COLOR_BG = "#FFFFFF"      # White background
-COLOR_DEFAULT = "#D3D6DA" # Light gray for empty tile
-COLOR_GRAY = "#787C7E"   # Gray for wrong letter
-COLOR_YELLOW = "#C9B458" # Yellow
-COLOR_GREEN = "#6AAA64"  # Green
-COLOR_WHITE = "#FFFFFF" # Letter color for colored tiles
-COLOR_BLACK = "#000000" # Letter color for default tiles
+COLOR_BG = "#FFFFFF"
+COLOR_DEFAULT = "#D3D6DA"
+COLOR_GRAY = "#787C7E"
+COLOR_YELLOW = "#C9B458"
+COLOR_GREEN = "#6AAA64"
+COLOR_WHITE = "#FFFFFF"
+COLOR_BLACK = "#000000"
 
 TITLE_FONT = ("Helvetica", 18, "bold")
 GRID_FONT = ("Helvetica", 20, "bold")
@@ -127,7 +126,6 @@ class TextOutputTab(ttk.Frame):
             self.output = f"An error occurred: {e}\n\nCheck console for details."
             print(e)
         
-        # Signal completion by generating a virtual event
         self.output_text.event_generate("<<ThreadDone>>")
 
     def on_thread_done(self, event=None):
@@ -276,6 +274,8 @@ class Mode3Tab(ttk.Frame):
     def __init__(self, parent, app):
         super().__init__(parent)
         self.app = app
+        self.timer_job = None # Holds the 'after' job ID
+        self.clock_job = None
         
         self.title_label = tk.Label(self, text="HUMAN vs. AI", font=TITLE_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
         self.title_label.pack(pady=10)
@@ -308,13 +308,81 @@ class Mode3Tab(ttk.Frame):
 
         self.status_label = tk.Label(self, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
         self.status_label.pack(pady=5)
+        
+        # --- NEW TIMER UI ---
+        self.timer_frame = ttk.Frame(self)
+        self.timer_frame.pack(pady=5)
+        
+        ttk.Label(self.timer_frame, text="Turn Timer (sec):", font=STATUS_FONT).pack(side=tk.LEFT, padx=5)
+        self.timer_spinbox = ttk.Spinbox(self.timer_frame, from_=0, to=120, width=4, font=STATUS_FONT)
+        self.timer_spinbox.set(0) # Default to 0 (off)
+        self.timer_spinbox.pack(side=tk.LEFT, padx=5)
+        
+        self.timer_label = ttk.Label(self.timer_frame, text="", font=(STATUS_FONT[0], STATUS_FONT[1], "bold"), foreground="red")
+        self.timer_label.pack(side=tk.LEFT, padx=10)
+
+        self.clock_label = ttk.Label(self.timer_frame, text="", font=STATUS_FONT, foreground="blue") # <-- NEW
+        self.clock_label.pack(side=tk.LEFT, padx=10) # <-- NEW
+        # --- END NEW TIMER UI ---
 
         self.reset_button = ttk.Button(self, text="New Game", command=self.start_new_game)
         self.reset_button.pack(pady=10)
 
         self.start_new_game()
 
+    def start_turn_timer(self):
+        self.stop_turn_timer() 
+        try:
+            self.seconds_left = int(self.timer_spinbox.get())
+        except ValueError:
+            self.seconds_left = 0
+            
+        if self.seconds_left > 0:
+            self.timer_label.config(text=f"Time: {self.seconds_left}")
+            self.timer_spinbox.config(state=tk.DISABLED) 
+            self.countdown()
+        else:
+            self.timer_label.config(text="")
+            self.timer_spinbox.config(state=tk.NORMAL) 
+
+    def stop_turn_timer(self):
+        if self.timer_job:
+            self.app.root.after_cancel(self.timer_job)
+            self.timer_job = None
+        self.timer_label.config(text="")
+        self.timer_spinbox.config(state=tk.NORMAL) 
+
+    def countdown(self):
+        if self.game_over:
+            return
+            
+        self.seconds_left -= 1
+        self.timer_label.config(text=f"Time: {self.seconds_left}")
+        
+        if self.seconds_left <= 0:
+            self.timer_label.config(text="Time's Up!")
+            self.end_game(f"Time's up! The word was: {self.target_word.upper()}")
+        else:
+            self.timer_job = self.app.root.after(1000, self.countdown)
+
+    # --- NEW CLOCK FUNCTIONS ---
+    def update_clock(self):
+        """Updates the clock label with the current time."""
+        current_time = time.strftime("%H:%M:%S")
+        self.clock_label.config(text=current_time)
+        # Schedule this function to run again after 1000ms (1 second)
+        self.clock_job = self.app.root.after(1000, self.update_clock)
+
+    def stop_clock(self):
+        """Stops the clock update loop."""
+        if self.clock_job:
+            self.app.root.after_cancel(self.clock_job)
+            self.clock_job = None
+        self.clock_label.config(text="")
+    # --- END NEW CLOCK FUNCTIONS ---
+
     def start_new_game(self):
+        self.stop_turn_timer() # MODIFIED
         self.game_over = False
         self.target_word = random.choice(self.app.permanent_answers)
         # print(f"DEBUG: Target word is {self.target_word}") 
@@ -331,8 +399,12 @@ class Mode3Tab(ttk.Frame):
         self.guess_entry.config(state=tk.NORMAL)
         self.guess_entry.delete(0, tk.END)
         self.guess_entry.focus()
+        self.start_turn_timer() # MODIFIED
+        self.update_clock()
 
     def on_human_guess(self, event=None):
+        self.stop_turn_timer() # MODIFIED
+        
         if self.game_over:
             return
 
@@ -341,9 +413,11 @@ class Mode3Tab(ttk.Frame):
 
         if len(guess) != 5:
             self.status_label.config(text="Guess must be 5 letters.")
+            self.start_turn_timer() # Restart timer if guess was invalid
             return
         if guess not in self.app.all_allowed_words:
             self.status_label.config(text=f"'{guess}' is not in the word list.")
+            self.start_turn_timer() # Restart timer if guess was invalid
             return
 
         colors_str = gameEngine.get_guess_colors(guess, self.target_word)
@@ -361,10 +435,8 @@ class Mode3Tab(ttk.Frame):
         self.status_label.config(text="AI is thinking...")
         self.guess_entry.config(state=tk.DISABLED) # Disable entry during AI turn
         
-        # ******** THIS IS THE FIX (from previous turn) ********
         self.app.root.update_idletasks() 
         self.app.root.after(500, self.run_ai_turn) 
-        # ******************************************************
 
     def run_ai_turn(self):
         if self.ai_row == 0:
@@ -396,8 +468,11 @@ class Mode3Tab(ttk.Frame):
         self.status_label.config(text="Your turn.")
         self.guess_entry.config(state=tk.NORMAL) # Re-enable entry
         self.guess_entry.focus()
+        self.start_turn_timer() # MODIFIED
 
     def end_game(self, message):
+        self.stop_turn_timer() # MODIFIED
+        self.stop_clock()
         self.game_over = True
         self.status_label.config(text=message)
         self.guess_entry.config(state=tk.DISABLED)
@@ -414,7 +489,7 @@ class Mode4Tab(ttk.Frame):
         self.grid_frame.pack(pady=10)
         
         self.helper_grid_labels = create_grid(self.grid_frame)
-        self.tile_feedback = [] # Stores 'B', 'Y', 'G' for current row
+        self.tile_feedback = []
         
         self.status_label = ttk.Label(self, text="", font=STATUS_FONT)
         self.status_label.pack(pady=10)
@@ -454,7 +529,6 @@ class Mode4Tab(ttk.Frame):
         
         self.status_label.config(text=f"AI Suggests: {self.ai_guess.upper()}. Click tiles to set colors.")
         
-        # ******** FIX 1: Set default color to GRAY/BLACK ********
         for c in range(5):
             label = self.helper_grid_labels[self.turn][c]
             label.config(text=self.ai_guess[c].upper(), bg=COLOR_GRAY, fg=COLOR_WHITE)
@@ -466,13 +540,12 @@ class Mode4Tab(ttk.Frame):
     def on_tile_click(self, row, col):
         """Cycles the color of a clicked tile in the AI Helper."""
         if self.game_over or row != self.turn:
-            return # Only allow clicking the current row
+            return
 
         label = self.helper_grid_labels[row][col]
         current_color_char = self.tile_feedback[col]
         
-        # ******** FIX 2: Cycle B(Black/Gray) -> Y -> G -> B ********
-        if current_color_char == 'B': # Black/Gray
+        if current_color_char == 'B':
             new_color_char = 'Y'
             bg_color = COLOR_YELLOW
             fg_color = COLOR_WHITE
@@ -480,7 +553,7 @@ class Mode4Tab(ttk.Frame):
             new_color_char = 'G'
             bg_color = COLOR_GREEN
             fg_color = COLOR_WHITE
-        else: # Green (or 'D' from old bug, loops back to B)
+        else:
             new_color_char = 'B'
             bg_color = COLOR_GRAY
             fg_color = COLOR_WHITE
@@ -493,14 +566,12 @@ class Mode4Tab(ttk.Frame):
         
         feedback_byg = "".join(self.tile_feedback)
         
-        # ******** FIX 3: Check for 'B' (the new default) not 'D' ********
         if feedback_byg.count('B') == 5:
              if not messagebox.askyesno("Submit Feedback?", "You have marked all letters as Black (Gray). Is this correct?"):
                  return
         
         feedback_num = feedback_byg.replace('B', '0').replace('Y', '1').replace('G', '2')
 
-        # Unbind click events for the row just submitted
         for c in range(5):
             self.helper_grid_labels[self.turn][c].unbind("<Button-1>")
             
@@ -556,7 +627,6 @@ class Mode4Tab(ttk.Frame):
                 self.helper_grid_labels[self.turn][c].unbind("<Button-1>")
 
     def reset_row_feedback(self):
-        # ******** FIX 4: Initialize list with 5 'B's (Black/Gray) ********
         self.tile_feedback = ['B'] * 5 
         
     def update_list_text(self, message):
