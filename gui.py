@@ -328,7 +328,7 @@ class Mode3Tab(ttk.Frame):
         self.vision_selector = ttk.Combobox(
             self.vision_frame, 
             textvariable=self.vision_var,
-            values=["Full Vision (Word and Grid Color)", "Half Blind (Word Only)", "Blind (None Whatsoever)"],
+            values=["Full Vision", "Half Blind", "Blind"],
             state="readonly",
             width=10
         )
@@ -551,7 +551,19 @@ class Mode3Tab(ttk.Frame):
         self.stop_turn_timer() # MODIFIED
         self.stop_clock()
         self.game_over = True
-        self.status_label.config(text=message)
+        if self.vision_var.get() == "Blind" and self.ai_row > 0:
+            self.status_label.config(text=f"{message} Revealing AI grid...")
+            
+            # Loop through the AI's stored guesses
+            for i, guess in enumerate(self.ai_guesses):
+                # Re-calculate the colors for each guess
+                colors_str = gameEngine.get_guess_colors(guess, self.target_word)
+                # Update the grid row by row
+                update_grid_row(self.ai_grid_labels, i, guess, colors_str)
+        else:
+            # Otherwise, just show the normal end message
+            self.status_label.config(text=message)
+        # --- END OF NEW LOGIC ---
         self.guess_entry.config(state=tk.DISABLED)
 
 
