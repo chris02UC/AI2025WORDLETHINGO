@@ -3,6 +3,7 @@ import threading
 import math
 import re
 import time
+import sys
 
 # packages for Mode 5
 try:
@@ -12,6 +13,8 @@ try:
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
     print("Warning: matplotlib or numpy not found. Mode 5 (Full Simulation) will not be able to plot.")
+
+this_module = sys.modules[__name__]
 
 GRAY = "⬛"
 YELLOW = "🟨"
