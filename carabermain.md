@@ -1,0 +1,72 @@
+## Mode 1: AI vs. Random
+
+**Tujuan:** Untuk melihat bagaimana AI memecahkan teka-teki Wordle dengan kata jawaban yang dipilih secara acak.
+
+**Cara Bermain:**
+1.  Klik tombol "Start New Random Game".
+2.  Aplikasi akan memilih satu kata acak dari daftar jawaban sebagai target.
+3.  Klik tombol "Next Step" secara berulang.
+4.  Anda akan melihat AI menebak kata tersebut, langkah demi langkah, di grid yang tersedia.
+
+---
+
+## Mode 2: AI vs. Specific
+
+**Tujuan:** Untuk menguji AI terhadap kata spesifik yang Anda inginkan.
+
+**Cara Bermain:**
+1.  Ketik 5 huruf kata jawaban yang valid (misalnya, "audio") di dalam kotak "Target Word".
+2.  Klik tombol "Start Game".
+3.  Klik tombol "Next Step" berulang kali untuk melihat AI memecahkan kata yang Anda tentukan.
+
+---
+
+## Mode 3: Human vs. AI
+
+**Tujuan:** Anda dan AI berlomba untuk menebak kata rahasia yang sama. Siapa cepat dia dapat!
+
+**Fitur Khusus:**
+
+* **AI Difficulty:** Anda bisa memilih tingkat kesulitan AI.
+    * **Easy:** AI akan menebak secara acak dari kata yang tersisa.
+    * **Medium/Hard:** AI akan menggunakan strategi ("salet", "blimpSearch", dll.) untuk menebak.
+
+* **Player Vision:** Mengatur apakah Anda bisa melihat progres AI.
+    * **Full Vision:** Anda melihat tebakan dan warna AI seperti biasa.
+    * **Half Blind:** Anda hanya melihat tebakan AI, tapi warnanya semua abu-abu.
+    * **Blind:** Anda tidak melihat tebakan AI sama sekali sampai game berakhir.
+
+* **Turn Timer (sec):** Anda bisa mengatur batas waktu (dalam detik) untuk giliran Anda. Jika waktu habis sebelum Anda menebak, Anda kalah.
+
+**Cara Bermain:**
+1.  Atur Difficulty, Vision, dan Timer sesuai keinginan.
+2.  Klik "New Game".
+3.  Ketik tebakan Anda di kotak besar di tengah, lalu tekan Enter.
+4.  Setelah Anda menebak, AI akan otomatis mengambil gilirannya.
+5.  Ulangi proses ini sampai salah satu dari kalian memenangkan permainan.
+
+---
+
+## Mode 4: AI Helper
+
+**Tujuan:** AI bertindak sebagai asisten untuk membantu Anda memecahkan game Wordle di tempat lain (misalnya, di situs web NYT).
+
+**Cara Bermain:**
+1.  Mulai game baru. AI akan menyarankan tebakan (dimulai dengan "SALET"). Masukkan tebakan tersebut di game Wordle Anda yang sebenarnya.
+2.  Lihat hasil warna yang Anda dapatkan di game tersebut.
+3.  Kembali ke aplikasi ini, lalu klik ubin/kotak di baris AI untuk mengubah warnanya (Abu-abu -> Kuning -> Hijau) agar sesuai dengan hasil Anda.
+4.  Setelah semua 5 warna benar, klik "Submit Feedback".
+5.  AI akan menyaring daftar kata yang mungkin dan memberi Anda tebakan terbaik berikutnya.
+6.  Ulangi langkah 2-6 sampai Anda menemukan jawabannya.
+
+---
+
+## Mode 5: Full Simulation
+
+**Tujuan:** Menjalankan tes penuh untuk melihat seberapa baik performa AI terhadap semua kata jawaban yang ada (ribuan kata).
+
+**Cara Bermain:**
+1.  Klik tombol "Run Full Simulation & Plot".
+2.  **PERINGATAN:** Proses ini memakan waktu beberapa menit.
+3.  Aplikasi tidak akan macet (karena berjalan di thread terpisah). Anda dapat melihat log prosesnya di kotak teks.
+4.  Setelah selesai, sebuah jendela grafik (histogram dari Matplotlib) akan muncul, menunjukkan statistik performa AI (misalnya, berapa banyak game yang diselesaikan dalam 3, 4, atau 5 tebakan).
