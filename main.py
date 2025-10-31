@@ -586,6 +586,47 @@ def solve_specific_word(target_word):
 
 # --- MODE 3: Human VS AI Wordle ---
 
+def get_random_guess(wordList):
+    """
+    AI STRATEGY: EASY
+    Picks a word completely at random from the list of possible answers.
+    This is the "dumbest" strategy.
+    """
+    if not wordList:
+         return "salet" # Fallback
+    return random.choice(wordList)
+
+def get_medium_guess(wordList):
+    """
+    AI STRATEGY: MEDIUM
+    Picks the word with the highest letter frequency (getMaxValue1).
+    This is a "dumber" strategy because it does not use the advanced
+    'blimpSearch' to solve tricky edge cases.
+    """
+    if not wordList:
+         return "salet" # Fallback
+    if len(wordList) == 1:
+        return wordList[0]
+    return getMaxValue1(wordList)
+
+def get_hard_guess(wordList):
+    """
+    AI STRATEGY: HARD (The original, best algorithm)
+    Uses the high-frequency guess (getMaxValue1) and also the
+    advanced 'blimpSearch' to handle difficult "blimp" scenarios.
+    """
+    if not wordList:
+         return "salet" # Fallback
+    if len(wordList) == 1:
+        return wordList[0]
+    if isBlimp(wordList):
+         print("(AI detected blimp condition)")
+         return blimpSearch(wordList)
+    else:
+         return getMaxValue1(wordList)
+
+# --- MODE 3: Human VS AI Wordle ---
+
 def play_human_vs_ai():
     try:
         _initialize_word_lists()
@@ -595,12 +636,13 @@ def play_human_vs_ai():
         
     global available_words, permanent_answers, wordsAllowed
     
+    # --- New Difficulty Prompt ---
     while True:
-        difficulty = input("Choose difficulty (easy/hard): ").lower().strip()
-        if difficulty in ['easy', 'hard']:
+        difficulty = input("Choose difficulty (easy/medium/hard): ").lower().strip()
+        if difficulty in ['easy', 'medium', 'hard']:
             break
         else:
-            print("Invalid input. Please type 'easy' or 'hard'.")
+            print("Invalid input. Please type 'easy', 'medium', or 'hard'.")
 
     target_word = random.choice(permanent_answers)
     print("\n--- Human vs AI Wordle ---")
@@ -648,23 +690,26 @@ def play_human_vs_ai():
 
             if not ai_available_words:
                  print("AI Error: No possible words left for AI!")
-                 ai_guess = "error" # Should not happen
-            elif len(ai_available_words) == 1:
-                 ai_guess = ai_available_words[0]
-            elif isBlimp(ai_available_words):
-                 print("(AI detected blimp condition)")
-                 ai_guess = blimpSearch(ai_available_words)
-            else:
-                 ai_guess = getMaxValue1(ai_available_words)
+                 ai_guess = "salet" # Use fallback
+            
+            # --- AI Difficulty Logic ---
+            # Call the correct function based on the chosen difficulty
+            elif difficulty == 'easy':
+                ai_guess = get_random_guess(ai_available_words)
+            elif difficulty == 'medium':
+                ai_guess = get_medium_guess(ai_available_words)
+            elif difficulty == 'hard':
+                ai_guess = get_hard_guess(ai_available_words)
+            # --- End AI Difficulty Logic ---
+
 
         ai_colors = get_guess_colors(ai_guess, target_word)
         ai_emoji = format_colors_to_emoji(ai_colors)
         ai_guesses_history.append(f"{ai_guess} -> {ai_emoji}")
 
-        if difficulty == 'easy':
-            print(f"AI guess ({turn}/6): {ai_guess} -> {ai_emoji}")
-        else:
-            print(f"AI guess ({turn}/6): ????? -> {ai_emoji}") # Hide the word
+        # Removed the 'easy'/'hard' check for hiding the guess.
+        # Now it always shows the AI's guess.
+        print(f"AI guess ({turn}/6): {ai_guess} -> {ai_emoji}")
 
         if ai_guess == target_word:
             print(f"\nThe AI guessed the word '{target_word}' in {turn} turns!")

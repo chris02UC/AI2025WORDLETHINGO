@@ -299,12 +299,35 @@ class Mode3Tab(ttk.Frame):
         self.ai_grid_labels = create_grid(self.ai_grid_frame)
 
         self.input_frame = tk.Frame(self, bg=COLOR_BG)
+        # ... this line should already exist
         self.input_frame.pack(pady=10)
+
+        # --- ADD THIS NEW BLOCK ---
+        self.difficulty_frame = tk.Frame(self, bg=COLOR_BG)
+        self.difficulty_frame.pack(pady=5)
+        
+        tk.Label(self.difficulty_frame, text="AI Difficulty:", font=STATUS_FONT, bg=COLOR_BG).pack(side=tk.LEFT, padx=5)
+        
+        self.difficulty_var = tk.StringVar(value="Hard")
+        self.difficulty_selector = ttk.Combobox(
+            self.difficulty_frame, 
+            textvariable=self.difficulty_var,
+            values=["Easy", "Medium", "Hard"],
+            state="readonly", # Prevents user from typing a custom value
+            width=10
+        )
+        self.difficulty_selector.pack(side=tk.LEFT, padx=5)
+        # --- END OF NEW BLOCK ---
+
+        # ... this line should already exist
+        self.status_label = tk.Label(self, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
 
         tk.Label(self.input_frame, text="Enter Guess:", font=STATUS_FONT, bg=COLOR_BG).pack(side=tk.LEFT, padx=5)
         self.guess_entry = tk.Entry(self.input_frame, width=7, font=GRID_FONT, justify='center')
         self.guess_entry.pack(side=tk.LEFT, padx=5)
         self.guess_entry.bind("<Return>", self.on_human_guess)
+        
+        
 
         self.status_label = tk.Label(self, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
         self.status_label.pack(pady=5)
@@ -399,6 +422,7 @@ class Mode3Tab(ttk.Frame):
         self.guess_entry.config(state=tk.NORMAL)
         self.guess_entry.delete(0, tk.END)
         self.guess_entry.focus()
+        self.difficulty_selector.config(state="readonly")
         self.start_turn_timer() # MODIFIED
         self.update_clock()
 
@@ -407,6 +431,12 @@ class Mode3Tab(ttk.Frame):
         
         if self.game_over:
             return
+
+        # --- ADD THIS BLOCK ---
+        # Disable selector after first guess
+        if self.human_row == 0:
+            self.difficulty_selector.config(state=tk.DISABLED)
+        # --- END OF BLOCK ---
 
         guess = self.guess_entry.get().lower().strip()
         self.guess_entry.delete(0, tk.END)
@@ -439,22 +469,38 @@ class Mode3Tab(ttk.Frame):
         self.app.root.after(500, self.run_ai_turn) 
 
     def run_ai_turn(self):
+        difficulty = self.difficulty_var.get() # Get current difficulty
+        
         if self.ai_row == 0:
-            ai_guess = "salet"
+            # --- First guess logic ---
+            if difficulty == "Easy":
+                # Easy: Start with a random word
+                ai_guess = random.choice(self.ai_available_words)
+            else:
+                # Medium/Hard: Start with the best word
+                ai_guess = "salet"
         else:
+            # --- Subsequent guess logic ---
             last_ai_guess = self.ai_guesses[-1]
             self.ai_available_words = gameEngine.filter_words(
                 self.ai_available_words, last_ai_guess, self.target_word
             )
             
             if not self.ai_available_words:
-                ai_guess = "salet" 
+                ai_guess = "salet" # Failsafe in case of word list error
             elif len(self.ai_available_words) == 1:
-                ai_guess = self.ai_available_words[0]
-            elif gameEngine.isBlimp(self.ai_available_words):
-                ai_guess = gameEngine.blimpSearch(self.ai_available_words)
+                ai_guess = self.ai_available_words[0] # Always guess the last word
+            
+            # --- Difficulty-based choice ---
+            elif difficulty == "Hard":
+                # Hard: Use optimal blimp/frequency search
+                if gameEngine.isBlimp(self.ai_available_words):
+                    ai_guess = gameEngine.blimpSearch(self.ai_available_words)
+                else:
+                    ai_guess = gameEngine.getMaxValue1(self.ai_available_words)
             else:
-                ai_guess = gameEngine.getMaxValue1(self.ai_available_words)
+                # Easy/Medium: Pick a random word from the *remaining possible* words
+                ai_guess = random.choice(self.ai_available_words)
         
         self.ai_guesses.append(ai_guess)
         ai_colors_str = gameEngine.get_guess_colors(ai_guess, self.target_word)
