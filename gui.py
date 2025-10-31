@@ -318,7 +318,22 @@ class Mode3Tab(ttk.Frame):
         )
         self.difficulty_selector.pack(side=tk.LEFT, padx=5)
         # --- END OF NEW BLOCK ---
-
+# --- ADD THIS NEW BLOCK ---
+        self.vision_frame = tk.Frame(self, bg=COLOR_BG)
+        self.vision_frame.pack(pady=5)
+        
+        tk.Label(self.vision_frame, text="Player Vision:", font=STATUS_FONT, bg=COLOR_BG).pack(side=tk.LEFT, padx=5)
+        
+        self.vision_var = tk.StringVar(value="Full Vision")
+        self.vision_selector = ttk.Combobox(
+            self.vision_frame, 
+            textvariable=self.vision_var,
+            values=["Full Vision (Word and Grid Color)", "Half Blind (Word Only)", "Blind (None Whatsoever)"],
+            state="readonly",
+            width=10
+        )
+        self.vision_selector.pack(side=tk.LEFT, padx=5)
+        # --- END OF NEW BLOCK ---
         # ... this line should already exist
         self.status_label = tk.Label(self, text="", font=STATUS_FONT, bg=COLOR_BG, fg=COLOR_BLACK)
 
@@ -423,6 +438,7 @@ class Mode3Tab(ttk.Frame):
         self.guess_entry.delete(0, tk.END)
         self.guess_entry.focus()
         self.difficulty_selector.config(state="readonly")
+        self.vision_selector.config(state="readonly")
         self.start_turn_timer() # MODIFIED
         self.update_clock()
 
@@ -436,6 +452,7 @@ class Mode3Tab(ttk.Frame):
         # Disable selector after first guess
         if self.human_row == 0:
             self.difficulty_selector.config(state=tk.DISABLED)
+            self.vision_selector.config(state=tk.DISABLED)
         # --- END OF BLOCK ---
 
         guess = self.guess_entry.get().lower().strip()
@@ -470,6 +487,7 @@ class Mode3Tab(ttk.Frame):
 
     def run_ai_turn(self):
         difficulty = self.difficulty_var.get() # Get current difficulty
+        vision = self.vision_var.get()         # <-- GET VISION SETTING
         
         if self.ai_row == 0:
             # --- First guess logic ---
@@ -504,7 +522,20 @@ class Mode3Tab(ttk.Frame):
         
         self.ai_guesses.append(ai_guess)
         ai_colors_str = gameEngine.get_guess_colors(ai_guess, self.target_word)
-        update_grid_row(self.ai_grid_labels, self.ai_row, ai_guess, ai_colors_str)
+        
+        # --- NEW VISION LOGIC BLOCK ---
+        if vision == "Full Vision":
+            # Normal: Show guess and colors
+            update_grid_row(self.ai_grid_labels, self.ai_row, ai_guess, ai_colors_str)
+        elif vision == "Half Blind":
+            # Show guess, but all colors are gray
+            all_gray_colors = "B" * 5 # "B" renders as COLOR_GRAY
+            update_grid_row(self.ai_grid_labels, self.ai_row, ai_guess, all_gray_colors)
+        elif vision == "Blind":
+            # Do nothing. The grid row remains empty (default color).
+            pass
+        # --- END OF NEW BLOCK ---
+
         self.ai_row += 1
 
         if ai_guess == self.target_word:
